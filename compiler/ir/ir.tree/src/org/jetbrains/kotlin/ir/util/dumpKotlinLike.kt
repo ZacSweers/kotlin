@@ -132,6 +132,17 @@ interface CustomKotlinLikeDumpStrategy {
 
     fun transformModifiersForDeclaration(declaration: IrDeclaration, modifiers: Modifiers): Modifiers = modifiers
 
+    /**
+     * Customize how a class name is rendered in expressions. The default returns the simple name.
+     *
+     * Example: override this to render nested class names with their full enclosing class chain rather than just their simple name.
+     *
+     * @param container the current container declaration being visited (the enclosing scope), or null
+     *   if no container is available.
+     * @param declaration the declaration whose name is being rendered.
+     */
+    fun nameOf(container: IrDeclaration?, declaration: IrDeclarationWithName): String = declaration.name.asString()
+
     data class Modifiers(
         val visibility: DescriptorVisibility = DescriptorVisibilities.DEFAULT_VISIBILITY,
         val isExpect: Boolean = false,
@@ -189,6 +200,7 @@ interface CustomKotlinLikeDumpStrategy {
 private class KotlinLikeDumper(val p: Printer, val options: KotlinLikeDumpOptions) : IrVisitor<Unit, IrDeclaration?>() {
     private val variableNameData = VariableNameData(options.normalizeNames)
     private var currentWhenStmt: IrWhen? = null
+    private var currentContainer: IrDeclaration? = null
 
     private val IrSymbol.safeName
         get() = if (!isBound) {
@@ -196,7 +208,7 @@ private class KotlinLikeDumper(val p: Printer, val options: KotlinLikeDumpOption
         } else {
             when (val owner = owner) {
                 is IrVariable -> owner.normalizedName(variableNameData)
-                is IrDeclarationWithName -> owner.name.toString()
+                is IrDeclarationWithName -> options.customDumpStrategy.nameOf(currentContainer, owner)
                 else -> "/* ERROR: unnamed symbol $signature */"
             }
         }
@@ -212,7 +224,7 @@ private class KotlinLikeDumper(val p: Printer, val options: KotlinLikeDumpOption
         get() = if (!isBound) {
             "/* ERROR: unbound symbol $signature */"
         } else {
-            (owner as? IrDeclaration)?.parentClassOrNull?.name?.toString() ?: "/* ERROR: unexpected parent for $safeName */"
+            (owner as? IrDeclaration)?.parentClassOrNull?.let { options.customDumpStrategy.nameOf(currentContainer, it) } ?: "/* ERROR: unexpected parent for $safeName */"
         }
 
     private val IrSymbol.safeParentClassOrNull
@@ -253,9 +265,14 @@ private class KotlinLikeDumper(val p: Printer, val options: KotlinLikeDumpOption
 
     private inline fun wrap(element: IrElement, container: IrDeclaration?, block: () -> Unit) {
         if (!options.customDumpStrategy.willPrintElement(element, container, p, options)) return
+        val previousContainer = currentContainer
+        if (element is IrDeclaration) {
+            currentContainer = element
+        }
         try {
             block()
         } finally {
+            currentContainer = previousContainer
             options.customDumpStrategy.didPrintElement(element, container, p)
         }
     }
@@ -1171,7 +1188,7 @@ private class KotlinLikeDumper(val p: Printer, val options: KotlinLikeDumpOption
                 // TODO where from to get type arguments for a class?
                 // TODO render it also for static members (from java)
                 symbol.safeParentClassOrNull?.let {
-                    p.printWithNoIndent(it.name.asString())
+                    p.printWithNoIndent(options.customDumpStrategy.nameOf(currentContainer, it))
                 }
             } else {
                 p.printWithNoIndent("<missing-receiver>")
