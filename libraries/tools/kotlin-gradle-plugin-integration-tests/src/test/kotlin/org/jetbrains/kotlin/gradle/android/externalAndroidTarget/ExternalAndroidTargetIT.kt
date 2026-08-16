@@ -263,6 +263,41 @@ class ExternalAndroidTargetIT : KGPBaseTest() {
         }
     }
 
+    @AndroidTestVersions(minVersion = TestVersions.AGP.AGP_811)
+    @GradleAndroidTest
+    fun `Parcelize adds Parcelable to commonMain classes on Android`(
+        gradleVersion: GradleVersion, androidVersion: String, jdkVersion: JdkVersions.ProvidedJdk,
+    ) {
+        project(
+            "android-multiplatorm-library-with-parcelize",
+            gradleVersion,
+            buildOptions = defaultBuildOptions.copy(androidVersion = androidVersion),
+            buildJdk = jdkVersion.location,
+        ) {
+            kotlinSourcesDir("commonMain").source("com/example/shared/model/AutomaticParcelable.kt") {
+                """
+                    package com.example.shared.model
+
+                    import kotlinx.parcelize.Parcelize
+
+                    @Parcelize
+                    data class AutomaticParcelable(val value: String)
+                """.trimIndent()
+            }
+            kotlinSourcesDir("androidMain").source("com/example/shared/model/AutomaticParcelable.android.kt") {
+                """
+                    package com.example.shared.model
+
+                    fun AutomaticParcelable.asAndroidParcelable(): android.os.Parcelable = this
+                """.trimIndent()
+            }
+
+            build("assemble") {
+                assertTasksExecuted(":compileAndroidMain", ":compileKotlinJvm")
+            }
+        }
+    }
+
     @GradleAndroidTest
     @AndroidTestVersions(minVersion = TestVersions.AGP.AGP_90)
     fun `KT-81060_transform_metadata_dependencies_doesnt_fail_on_configuration_cache_deserialization`(

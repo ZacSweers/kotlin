@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.fir.FirSession
 import org.jetbrains.kotlin.fir.extensions.FirExtensionRegistrar
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.parcelize.ParcelizeNames
 import org.jetbrains.kotlin.parcelize.fir.diagnostics.KtErrorsParcelize
 
 class FirParcelizeExtensionRegistrar(
@@ -16,6 +17,8 @@ class FirParcelizeExtensionRegistrar(
     private val experimentalCodeGeneration: Boolean = false,
 ) : FirExtensionRegistrar() {
     override fun ExtensionRegistrarContext.configurePlugin() {
+        // Custom Parcelize annotations retain their existing explicit-Parcelable contract.
+        +::FirParcelizeSupertypesExtension.bind(ParcelizeNames.PARCELIZE_CLASS_FQ_NAMES)
         +::FirParcelizeDeclarationGenerator.bind(parcelizeAnnotationFqNames)
         +::firParcelizeCheckersExtension
 
