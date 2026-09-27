@@ -58,6 +58,18 @@ public class IncrementalJvmWithPluginCompilerRunnerTestGenerated extends Abstrac
   }
 
   @Test
+  @TestMetadata("filterPredicateByDeclarationKind")
+  public void testFilterPredicateByDeclarationKind() {
+    runTest("plugins/plugin-sandbox/plugin-sandbox-ic-test/testData/jvmAndKlib/pureKotlin/filterPredicateByDeclarationKind/");
+  }
+
+  @Test
+  @TestMetadata("filterTopLevelFunctionsByPredicate")
+  public void testFilterTopLevelFunctionsByPredicate() {
+    runTest("plugins/plugin-sandbox/plugin-sandbox-ic-test/testData/jvmAndKlib/pureKotlin/filterTopLevelFunctionsByPredicate/");
+  }
+
+  @Test
   @TestMetadata("generateNewTopLevelFunction")
   public void testGenerateNewTopLevelFunction() {
     runTest("plugins/plugin-sandbox/plugin-sandbox-ic-test/testData/jvmAndKlib/pureKotlin/generateNewTopLevelFunction/");

@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.fir.extensions.predicate
 
+import org.jetbrains.kotlin.descriptors.annotations.KotlinTarget
 import org.jetbrains.kotlin.fir.extensions.AnnotationFqn
 
 /**
@@ -40,11 +41,15 @@ sealed class LookupPredicate : AbstractPredicate<LookupPredicate> {
         }
     }
 
-    sealed class Annotated(final override val annotations: Set<AnnotationFqn>) : LookupPredicate(), AbstractPredicate.Annotated<LookupPredicate> {
+    sealed class Annotated(
+        final override val annotations: Set<AnnotationFqn>,
+        final override val targets: Set<KotlinTarget>,
+    ) : LookupPredicate(), AbstractPredicate.Annotated<LookupPredicate> {
         init {
             require(annotations.isNotEmpty()) {
                 "Annotations should be not empty"
             }
+            PredicateTargets.requireSupported(targets)
         }
 
         override fun <R, D> accept(visitor: PredicateVisitor<LookupPredicate, R, D>, data: D): R {
@@ -52,26 +57,38 @@ sealed class LookupPredicate : AbstractPredicate<LookupPredicate> {
         }
     }
 
-    class AnnotatedWith(annotations: Set<AnnotationFqn>) : Annotated(annotations), AbstractPredicate.AnnotatedWith<LookupPredicate> {
+    class AnnotatedWith @JvmOverloads constructor(
+        annotations: Set<AnnotationFqn>,
+        targets: Set<KotlinTarget> = emptySet(),
+    ) : Annotated(annotations, targets), AbstractPredicate.AnnotatedWith<LookupPredicate> {
         override fun <R, D> accept(visitor: PredicateVisitor<LookupPredicate, R, D>, data: D): R {
             return visitor.visitAnnotatedWith(this, data)
         }
     }
 
-    class AncestorAnnotatedWith(annotations: Set<AnnotationFqn>) : Annotated(annotations), AbstractPredicate.AncestorAnnotatedWith<LookupPredicate> {
+    class AncestorAnnotatedWith @JvmOverloads constructor(
+        annotations: Set<AnnotationFqn>,
+        targets: Set<KotlinTarget> = emptySet(),
+    ) : Annotated(annotations, targets), AbstractPredicate.AncestorAnnotatedWith<LookupPredicate> {
         override fun <R, D> accept(visitor: PredicateVisitor<LookupPredicate, R, D>, data: D): R {
             return visitor.visitAncestorAnnotatedWith(this, data)
         }
     }
 
-    class ParentAnnotatedWith(annotations: Set<AnnotationFqn>) : Annotated(annotations), AbstractPredicate.ParentAnnotatedWith<LookupPredicate> {
+    class ParentAnnotatedWith @JvmOverloads constructor(
+        annotations: Set<AnnotationFqn>,
+        targets: Set<KotlinTarget> = emptySet(),
+    ) : Annotated(annotations, targets), AbstractPredicate.ParentAnnotatedWith<LookupPredicate> {
         override fun <R, D> accept(visitor: PredicateVisitor<LookupPredicate, R, D>, data: D): R {
             return visitor.visitParentAnnotatedWith(this, data)
         }
     }
 
 
-    class HasAnnotatedWith(annotations: Set<AnnotationFqn>) : Annotated(annotations), AbstractPredicate.HasAnnotatedWith<LookupPredicate> {
+    class HasAnnotatedWith @JvmOverloads constructor(
+        annotations: Set<AnnotationFqn>,
+        targets: Set<KotlinTarget> = emptySet(),
+    ) : Annotated(annotations, targets), AbstractPredicate.HasAnnotatedWith<LookupPredicate> {
         override fun <R, D> accept(visitor: PredicateVisitor<LookupPredicate, R, D>, data: D): R {
             return visitor.visitHasAnnotatedWith(this, data)
         }
@@ -99,6 +116,22 @@ sealed class LookupPredicate : AbstractPredicate<LookupPredicate> {
         override fun hasAnnotated(annotations: Collection<AnnotationFqn>): LookupPredicate = HasAnnotatedWith(annotations.toSet())
         override fun annotatedOrUnder(annotations: Collection<AnnotationFqn>): LookupPredicate =
             annotated(annotations) or ancestorAnnotated(annotations)
+
+        // ------------------- targets -------------------
+        override fun annotated(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): LookupPredicate =
+            AnnotatedWith(annotations.toSet(), targets.toSet())
+
+        override fun ancestorAnnotated(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): LookupPredicate =
+            AncestorAnnotatedWith(annotations.toSet(), targets.toSet())
+
+        override fun parentAnnotated(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): LookupPredicate =
+            ParentAnnotatedWith(annotations.toSet(), targets.toSet())
+
+        override fun hasAnnotated(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): LookupPredicate =
+            HasAnnotatedWith(annotations.toSet(), targets.toSet())
+
+        override fun annotatedOrUnder(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): LookupPredicate =
+            annotated(annotations, targets) or ancestorAnnotated(annotations, targets)
     }
 
     companion object {

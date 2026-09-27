@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.fir.expressions.FirAnnotation
 import org.jetbrains.kotlin.fir.extensions.predicate.AbstractPredicate
 import org.jetbrains.kotlin.fir.extensions.predicate.DeclarationPredicate
 import org.jetbrains.kotlin.fir.extensions.predicate.LookupPredicate
+import org.jetbrains.kotlin.fir.extensions.predicate.PredicateTargets
 import org.jetbrains.kotlin.fir.extensions.predicate.PredicateVisitor
 import org.jetbrains.kotlin.fir.lookupTracker
 import org.jetbrains.kotlin.fir.resolve.fqName
@@ -123,25 +124,25 @@ class FirPredicateBasedProviderImpl(private val session: FirSession) : FirPredic
         // ------------------------------------ Annotated ------------------------------------
 
         override fun visitAnnotatedWith(predicate: AbstractPredicate.AnnotatedWith<P>, data: FirDeclaration): Boolean {
-            return matchWith(data, predicate.annotations)
+            return matchWith(data, predicate.annotations) && matchTargets(data, predicate)
         }
 
         override fun visitAncestorAnnotatedWith(
             predicate: AbstractPredicate.AncestorAnnotatedWith<P>,
             data: FirDeclaration
         ): Boolean {
-            return matchUnder(data, predicate.annotations)
+            return matchUnder(data, predicate.annotations) && matchTargets(data, predicate)
         }
 
         override fun visitParentAnnotatedWith(
             predicate: AbstractPredicate.ParentAnnotatedWith<P>,
             data: FirDeclaration
         ): Boolean {
-            return matchParentWith(data, predicate.annotations)
+            return matchParentWith(data, predicate.annotations) && matchTargets(data, predicate)
         }
 
         override fun visitHasAnnotatedWith(predicate: AbstractPredicate.HasAnnotatedWith<P>, data: FirDeclaration): Boolean {
-            return matchHasAnnotatedWith(data, predicate.annotations)
+            return matchHasAnnotatedWith(data, predicate.annotations) && matchTargets(data, predicate)
         }
 
         // ------------------------------------ Meta-annotated ------------------------------------
@@ -178,6 +179,11 @@ class FirPredicateBasedProviderImpl(private val session: FirSession) : FirPredic
 
         private fun matchHasAnnotatedWith(declaration: FirDeclaration, annotations: Set<AnnotationFqn>): Boolean {
             return cache.annotationsOfHasAnnotated[declaration].any { it in annotations }
+        }
+
+        @OptIn(FirExtensionApiInternals::class)
+        private fun matchTargets(declaration: FirDeclaration, predicate: AbstractPredicate.Annotated<P>): Boolean {
+            return PredicateTargets.matches(predicate.targets, declaration)
         }
     }
 

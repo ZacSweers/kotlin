@@ -26,6 +26,7 @@ import org.jetbrains.kotlin.fir.extensions.*
 import org.jetbrains.kotlin.fir.extensions.predicate.AbstractPredicate
 import org.jetbrains.kotlin.fir.extensions.predicate.DeclarationPredicate
 import org.jetbrains.kotlin.fir.extensions.predicate.LookupPredicate
+import org.jetbrains.kotlin.fir.extensions.predicate.PredicateTargets
 import org.jetbrains.kotlin.fir.extensions.predicate.PredicateVisitor
 import org.jetbrains.kotlin.fir.psi
 import org.jetbrains.kotlin.fir.symbols.FirBasedSymbol
@@ -129,11 +130,11 @@ internal class LLFirIdePredicateBasedProvider(
         }
 
         override fun visitAnnotatedWith(predicate: AbstractPredicate.AnnotatedWith<P>, data: FirDeclaration): Boolean {
-            return annotationsOnDeclaration(data).any { it in predicate.annotations }
+            return annotationsOnDeclaration(data).any { it in predicate.annotations } && matchTargets(data, predicate)
         }
 
         override fun visitAncestorAnnotatedWith(predicate: AbstractPredicate.AncestorAnnotatedWith<P>, data: FirDeclaration): Boolean {
-            return annotationsOnOuterDeclarations(data).any { it in predicate.annotations }
+            return annotationsOnOuterDeclarations(data).any { it in predicate.annotations } && matchTargets(data, predicate)
         }
 
         override fun visitMetaAnnotatedWith(predicate: AbstractPredicate.MetaAnnotatedWith<P>, data: FirDeclaration): Boolean {
@@ -143,6 +144,7 @@ internal class LLFirIdePredicateBasedProvider(
         }
 
         override fun visitParentAnnotatedWith(predicate: AbstractPredicate.ParentAnnotatedWith<P>, data: FirDeclaration): Boolean {
+            if (!matchTargets(data, predicate)) return false
             val parent = data.directParentDeclaration ?: return false
             val parentPredicate = DeclarationPredicate.AnnotatedWith(predicate.annotations)
 
@@ -150,6 +152,7 @@ internal class LLFirIdePredicateBasedProvider(
         }
 
         override fun visitHasAnnotatedWith(predicate: AbstractPredicate.HasAnnotatedWith<P>, data: FirDeclaration): Boolean {
+            if (!matchTargets(data, predicate)) return false
             val childPredicate = DeclarationPredicate.AnnotatedWith(predicate.annotations)
 
             return data.anyDirectChildDeclarationMatches(childPredicate)
@@ -157,6 +160,11 @@ internal class LLFirIdePredicateBasedProvider(
 
         private val FirDeclaration.directParentDeclaration: FirDeclaration?
             get() = getOwnersOfDeclaration(this)?.lastOrNull()?.fir
+
+        @OptIn(FirExtensionApiInternals::class)
+        private fun matchTargets(declaration: FirDeclaration, predicate: AbstractPredicate.Annotated<P>): Boolean {
+            return PredicateTargets.matches(predicate.targets, declaration)
+        }
     }
 
     private fun FirDeclaration.anyDirectChildDeclarationMatches(childPredicate: DeclarationPredicate): Boolean {

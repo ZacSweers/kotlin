@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.fir.extensions.predicate
 
+import org.jetbrains.kotlin.descriptors.annotations.KotlinTarget
 import org.jetbrains.kotlin.fir.extensions.AnnotationFqn
 
 // -------------------------------------------- Predicates --------------------------------------------
@@ -45,12 +46,15 @@ sealed class DeclarationPredicate : AbstractPredicate<DeclarationPredicate> {
 
     // ------------------------------------ Annotated ------------------------------------
 
-    sealed class Annotated(final override val annotations: Set<AnnotationFqn>) : DeclarationPredicate(),
-        AbstractPredicate.Annotated<DeclarationPredicate> {
+    sealed class Annotated(
+        final override val annotations: Set<AnnotationFqn>,
+        final override val targets: Set<KotlinTarget>,
+    ) : DeclarationPredicate(), AbstractPredicate.Annotated<DeclarationPredicate> {
         init {
             require(annotations.isNotEmpty()) {
                 "Annotations should be not empty"
             }
+            PredicateTargets.requireSupported(targets)
         }
 
         final override val metaAnnotations: Set<AnnotationFqn>
@@ -61,28 +65,37 @@ sealed class DeclarationPredicate : AbstractPredicate<DeclarationPredicate> {
         }
     }
 
-    class AnnotatedWith(annotations: Set<AnnotationFqn>) : Annotated(annotations), AbstractPredicate.AnnotatedWith<DeclarationPredicate> {
+    class AnnotatedWith @JvmOverloads constructor(
+        annotations: Set<AnnotationFqn>,
+        targets: Set<KotlinTarget> = emptySet(),
+    ) : Annotated(annotations, targets), AbstractPredicate.AnnotatedWith<DeclarationPredicate> {
         override fun <R, D> accept(visitor: PredicateVisitor<DeclarationPredicate, R, D>, data: D): R {
             return visitor.visitAnnotatedWith(this, data)
         }
     }
 
-    class AncestorAnnotatedWith(annotations: Set<AnnotationFqn>) : Annotated(annotations),
-        AbstractPredicate.AncestorAnnotatedWith<DeclarationPredicate> {
+    class AncestorAnnotatedWith @JvmOverloads constructor(
+        annotations: Set<AnnotationFqn>,
+        targets: Set<KotlinTarget> = emptySet(),
+    ) : Annotated(annotations, targets), AbstractPredicate.AncestorAnnotatedWith<DeclarationPredicate> {
         override fun <R, D> accept(visitor: PredicateVisitor<DeclarationPredicate, R, D>, data: D): R {
             return visitor.visitAncestorAnnotatedWith(this, data)
         }
     }
 
-    class ParentAnnotatedWith(annotations: Set<AnnotationFqn>) : Annotated(annotations),
-        AbstractPredicate.ParentAnnotatedWith<DeclarationPredicate> {
+    class ParentAnnotatedWith @JvmOverloads constructor(
+        annotations: Set<AnnotationFqn>,
+        targets: Set<KotlinTarget> = emptySet(),
+    ) : Annotated(annotations, targets), AbstractPredicate.ParentAnnotatedWith<DeclarationPredicate> {
         override fun <R, D> accept(visitor: PredicateVisitor<DeclarationPredicate, R, D>, data: D): R {
             return visitor.visitParentAnnotatedWith(this, data)
         }
     }
 
-    class HasAnnotatedWith(annotations: Set<AnnotationFqn>) : Annotated(annotations),
-        AbstractPredicate.HasAnnotatedWith<DeclarationPredicate> {
+    class HasAnnotatedWith @JvmOverloads constructor(
+        annotations: Set<AnnotationFqn>,
+        targets: Set<KotlinTarget> = emptySet(),
+    ) : Annotated(annotations, targets), AbstractPredicate.HasAnnotatedWith<DeclarationPredicate> {
         override fun <R, D> accept(visitor: PredicateVisitor<DeclarationPredicate, R, D>, data: D): R {
             return visitor.visitHasAnnotatedWith(this, data)
         }
@@ -141,6 +154,22 @@ sealed class DeclarationPredicate : AbstractPredicate<DeclarationPredicate> {
 
         fun metaAnnotated(metaAnnotations: Collection<AnnotationFqn>, includeItself: Boolean): DeclarationPredicate =
             MetaAnnotatedWith(metaAnnotations.toSet(), includeItself)
+
+        // ------------------- targets -------------------
+        override fun annotated(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): DeclarationPredicate =
+            AnnotatedWith(annotations.toSet(), targets.toSet())
+
+        override fun ancestorAnnotated(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): DeclarationPredicate =
+            AncestorAnnotatedWith(annotations.toSet(), targets.toSet())
+
+        override fun parentAnnotated(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): DeclarationPredicate =
+            ParentAnnotatedWith(annotations.toSet(), targets.toSet())
+
+        override fun hasAnnotated(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): DeclarationPredicate =
+            HasAnnotatedWith(annotations.toSet(), targets.toSet())
+
+        override fun annotatedOrUnder(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): DeclarationPredicate =
+            annotated(annotations, targets) or ancestorAnnotated(annotations, targets)
     }
 
     companion object {

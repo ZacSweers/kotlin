@@ -20,6 +20,7 @@ import org.jetbrains.kotlin.analysis.low.level.api.fir.sessions.llFirResolvableS
 import org.jetbrains.kotlin.analysis.low.level.api.fir.test.configurators.LLSourceLikeTestConfigurator
 import org.jetbrains.kotlin.analysis.test.framework.base.AbstractAnalysisApiExecutionTest
 import org.jetbrains.kotlin.analysis.test.framework.utils.executeOnPooledThreadInReadAction
+import org.jetbrains.kotlin.descriptors.annotations.KotlinTarget
 import org.jetbrains.kotlin.fir.FirElement
 import org.jetbrains.kotlin.fir.declarations.FirFunction
 import org.jetbrains.kotlin.fir.declarations.FirResolvePhase
@@ -27,8 +28,14 @@ import org.jetbrains.kotlin.fir.declarations.resolvePhase
 import org.jetbrains.kotlin.fir.expressions.FirFunctionCall
 import org.jetbrains.kotlin.fir.expressions.FirStatement
 import org.jetbrains.kotlin.fir.extensions.FirPredicateBasedProvider
+import org.jetbrains.kotlin.fir.extensions.predicate.DeclarationPredicate
+import org.jetbrains.kotlin.fir.extensions.predicate.LookupPredicate
+import org.jetbrains.kotlin.fir.extensions.predicateBasedProvider
 import org.jetbrains.kotlin.fir.extensions.registeredPluginAnnotations
 import org.jetbrains.kotlin.fir.psi
+import org.jetbrains.kotlin.fir.symbols.FirBasedSymbol
+import org.jetbrains.kotlin.fir.symbols.impl.FirCallableSymbol
+import org.jetbrains.kotlin.fir.symbols.impl.FirClassLikeSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol
 import org.jetbrains.kotlin.fir.symbols.lazyResolveToPhase
 import org.jetbrains.kotlin.name.ClassId
@@ -39,6 +46,7 @@ import org.jetbrains.kotlin.test.services.assertions
 import org.jetbrains.kotlin.utils.findIsInstanceAnd
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class LLGenericAnalysisTest : AbstractAnalysisApiExecutionTest("testData/genericAnalysis") {
     override val configurator = LLSourceLikeTestConfigurator()
@@ -170,6 +178,56 @@ class LLGenericAnalysisTest : AbstractAnalysisApiExecutionTest("testData/generic
     }
 
     @Test
+    fun predicateTargets(ktFile: KtFile) {
+        withResolutionFacade(ktFile) { resolutionFacade ->
+            val provider = resolutionFacade.useSiteFirSession.predicateBasedProvider
+            val annotation = FqName("org.jetbrains.kotlin.plugin.sandbox.TestTopLevelPrivateSuspendFun")
+
+            fun lookup(vararg targets: KotlinTarget): Set<String> {
+                val predicate = LookupPredicate.create { annotated(listOf(annotation), targets.toSet()) }
+                return provider.getSymbolsByPredicate(predicate).mapTo(mutableSetOf()) { it.predicateTestName() }
+            }
+
+            assertEquals(
+                provider.getSymbolsByPredicate(LookupPredicate.create { annotated(annotation) }).mapTo(mutableSetOf()) {
+                    it.predicateTestName()
+                },
+                lookup(),
+            )
+            assertEquals(setOf("topLevelFunction"), lookup(KotlinTarget.TOP_LEVEL_FUNCTION))
+            assertEquals(setOf("Outer.memberFunction"), lookup(KotlinTarget.MEMBER_FUNCTION))
+            assertEquals(setOf("topLevelFunction", "Outer.memberFunction"), lookup(KotlinTarget.FUNCTION))
+            assertEquals(
+                setOf("TopClass", "TopInterface", "TopObject", "TopEnum", "TopAnnotation", "Outer", "Outer.Nested"),
+                lookup(KotlinTarget.CLASS),
+            )
+            assertEquals(setOf("TopClass", "Outer", "Outer.Nested"), lookup(KotlinTarget.CLASS_ONLY))
+            assertEquals(setOf("TopInterface", "TopObject"), lookup(KotlinTarget.INTERFACE, KotlinTarget.OBJECT))
+            assertEquals(setOf("TopEnum.ENTRY"), lookup(KotlinTarget.ENUM_ENTRY))
+            assertEquals(setOf("Alias"), lookup(KotlinTarget.TYPEALIAS))
+            assertEquals(setOf("ConstructorOnly.ConstructorOnly"), lookup(KotlinTarget.CONSTRUCTOR))
+            assertEquals(setOf("topLevelProperty"), lookup(KotlinTarget.TOP_LEVEL_PROPERTY))
+            // Enum entries are property targets too, like with `@Target`. Getter-only annotations don't make the property match.
+            assertEquals(setOf("topLevelProperty", "Outer.memberProperty", "TopEnum.ENTRY"), lookup(KotlinTarget.PROPERTY))
+
+            val topLevelFunctions = DeclarationPredicate.create {
+                annotated(listOf(annotation), setOf(KotlinTarget.TOP_LEVEL_FUNCTION))
+            }
+            val functions = provider.getSymbolsByPredicate(
+                LookupPredicate.create { annotated(listOf(annotation), setOf(KotlinTarget.FUNCTION)) }
+            )
+            assertEquals(
+                setOf("topLevelFunction"),
+                functions.filter { provider.matches(topLevelFunctions, it) }.mapTo(mutableSetOf()) { it.predicateTestName() },
+            )
+
+            assertFailsWith<IllegalArgumentException> {
+                LookupPredicate.create { annotated(listOf(annotation), setOf(KotlinTarget.FIELD)) }
+            }
+        }
+    }
+
+    @Test
     fun rootCompilerPluginAnnotation(ktFile: KtFile, testServices: TestServices) {
         withResolutionFacade(ktFile) { resolutionFacade ->
             val pluginAnnotations = resolutionFacade.useSiteFirSession.registeredPluginAnnotations
@@ -184,4 +242,13 @@ class LLGenericAnalysisTest : AbstractAnalysisApiExecutionTest("testData/generic
             )
         }
     }
+}
+
+private fun FirBasedSymbol<*>.predicateTestName(): String = when (this) {
+    is FirClassLikeSymbol<*> -> classId.relativeClassName.asString()
+    is FirCallableSymbol<*> -> {
+        val id = callableId ?: error("Unexpected callable without an id: $this")
+        listOfNotNull(id.classId?.relativeClassName?.asString(), id.callableName.asString()).joinToString(".")
+    }
+    else -> error("Unexpected symbol $this")
 }

@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.fir.extensions.predicate
 
+import org.jetbrains.kotlin.descriptors.annotations.KotlinTarget
 import org.jetbrains.kotlin.fir.extensions.AnnotationFqn
 import org.jetbrains.kotlin.fir.extensions.FirPredicateBasedProvider
 
@@ -64,6 +65,18 @@ sealed interface AbstractPredicate<P : AbstractPredicate<P>> {
      *  Declaration will be matched if at least one of [annotations] is found
      */
     sealed interface Annotated<P : AbstractPredicate<P>> : AbstractPredicate<P> {
+        /**
+         * Kinds of declarations this predicate matches. An empty set matches declarations of any kind.
+         *
+         * A declaration matches if one of its annotation targets is in this set. These are the same targets the compiler
+         * checks for `@Target`. For example, [KotlinTarget.FUNCTION] matches every function
+         * and [KotlinTarget.TOP_LEVEL_FUNCTION] matches only top-level functions. Only [PredicateTargets.supported] are allowed.
+         *
+         * [FirPredicateBasedProvider.getSymbolsByPredicate] checks targets before it records a symbol for incremental compilation.
+         * Declarations of other kinds aren't recorded.
+         */
+        val targets: Set<KotlinTarget>
+
         override fun <R, D> accept(visitor: PredicateVisitor<P, R, D>, data: D): R {
             return visitor.visitAnnotated(this, data)
         }
@@ -242,5 +255,14 @@ sealed interface AbstractPredicate<P : AbstractPredicate<P>> {
         abstract fun hasAnnotated(annotations: Collection<AnnotationFqn>): P
 
         abstract fun annotatedOrUnder(annotations: Collection<AnnotationFqn>): P
+
+        // ------------------- targets -------------------
+        // These only match declarations with one of the given targets. See [Annotated.targets].
+        abstract fun annotated(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): P
+        abstract fun ancestorAnnotated(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): P
+        abstract fun parentAnnotated(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): P
+        abstract fun hasAnnotated(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): P
+
+        abstract fun annotatedOrUnder(annotations: Collection<AnnotationFqn>, targets: Set<KotlinTarget>): P
     }
 }
